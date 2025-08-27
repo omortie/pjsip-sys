@@ -14,3 +14,4 @@ pkg-config = "0.3.16"
 
 
 [dependencies]
+thiserror = "2.0.16"
