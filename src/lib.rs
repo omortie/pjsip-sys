@@ -31,7 +31,6 @@ pub fn ensure_pj_thread_registered() {
 }
 
 pub fn initialize_telephony(logLevel:u32, incommingCallBehaviour:OnIncommingCall, port:u32, transportmode :TransportMode) -> Result<i8,TelephonyError> {
-
     // INIT
     let initResult = init(logLevel,incommingCallBehaviour);
     match(initResult){
