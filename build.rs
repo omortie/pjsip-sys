@@ -21,46 +21,8 @@ impl bindgen::callbacks::ParseCallbacks for IgnoreMacros {
     }
 }
 
-// WINDOWS
-fn link_libs_windows() {
-    let project_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    // The compiled libraries have been copied out of PJPROJECT to pjproject-sys/pjlibs/
-    println!("cargo:rustc-link-search={}/pjlibs/windows", project_dir);
-    println!("cargo:rustc-link-lib=static=libpjproject-x86_64-x64-vc14-Release");
-}
-
 fn main() {
-    pkg_config::Config::new().probe("libpjproject").unwrap();
     println!("cargo:rerun-if-changed=wrapper.h");
-
-    let ignored_macros = IgnoreMacros(
-        vec![
-            "FP_NORMAL".into(),
-            "FP_SUBNORMAL".into(),
-            "FP_ZERO".into(),
-            "FP_INFINITE".into(),
-            "FP_NAN".into(),
-            "IPPORT_RESERVED".into(),
-        ]
-        .into_iter()
-        .collect(),
-    );
-
-    let bindings = bindgen::Builder::default()
-        .clang_arg("-I./pjproject/pjlib/include")
-        .clang_arg("-I./pjproject/pjsip/include")
-        .clang_arg("-I./pjproject/pjlib-util/include")
-        .clang_arg("-I./pjproject/pjmedia/include")
-        .clang_arg("-I./pjproject/pjnath/include")
-        .header("wrapper.h")
-        .parse_callbacks(Box::new(ignored_macros))
-        .generate()
-        .expect("Unable to generate bindings");
-
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-    bindings
-        .write_to_file(out_path.join("bindings.rs"))
-        .expect("Couldn't write bindings!");
 
     //1. Fetch pjproject
     let curr_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -90,9 +52,50 @@ fn main() {
     {
         link_libs_unix();
     }
+
+    let ignored_macros = IgnoreMacros(
+        vec![
+            "FP_NORMAL".into(),
+            "FP_SUBNORMAL".into(),
+            "FP_ZERO".into(),
+            "FP_INFINITE".into(),
+            "FP_NAN".into(),
+            "IPPORT_RESERVED".into(),
+        ]
+        .into_iter()
+        .collect(),
+    );
+
+    //4. Produce bindings.rs file
+    let bindings = bindgen::Builder::default()
+        .clang_arg("-I./pjproject/pjlib/include")
+        .clang_arg("-I./pjproject/pjsip/include")
+        .clang_arg("-I./pjproject/pjlib-util/include")
+        .clang_arg("-I./pjproject/pjmedia/include")
+        .clang_arg("-I./pjproject/pjnath/include")
+        .header("wrapper.h")
+        .parse_callbacks(Box::new(ignored_macros))
+        .generate()
+        .expect("Unable to generate bindings");
+
+    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    bindings
+        .write_to_file(out_path.join("bindings.rs"))
+        .expect("Couldn't write bindings!");
+}
+
+// WINDOWS
+fn link_libs_windows() {
+    println!("linking to windows");
+    let project_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    // The compiled libraries have been copied out of PJPROJECT to pjproject-sys/pjlibs/
+    println!("cargo:rustc-link-search={}/pjlibs/windows", project_dir);
+    println!("cargo:rustc-link-lib=static=libpjproject-x86_64-x64-vc14-Release");
 }
 
 fn link_libs_unix() {
+    println!("linking to unix");
+
     let project_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
 
     println!("cargo:rustc-link-search={}/pjlibs/linux", project_dir);
