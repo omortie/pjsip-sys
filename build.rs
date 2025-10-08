@@ -1,14 +1,11 @@
 extern crate bindgen;
-extern crate cc;
-extern crate make_cmd;
 
 use os_info;
 
 use std::collections::HashSet;
-use std::env;
-use std::fs::File;
+use std::{env, fs};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use zip::ZipArchive;
 
 #[derive(Debug)]
 struct IgnoreMacros(HashSet<String>);
@@ -26,29 +23,20 @@ impl bindgen::callbacks::ParseCallbacks for IgnoreMacros {
 fn main() {
     println!("cargo:rerun-if-changed=wrapper.h");
 
-    //1. Fetch pjproject
-    let curr_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    Command::new("git")
-        .arg("submodule")
-        .arg("update")
-        .arg("--init")
-        .current_dir(&curr_dir)
-        .status()
-        .unwrap();
-
-    //2. Create config_site.h (so bindgen doesnt complain about missing header files)
-    create_config();
+    //1. Get the pre-compiled PJPROJECT binaries from Github Releases
+    let base = "https://github.com/omortie/pjsip-sys/releases/download/pre-compiled";
 
     //3. Determine OS and Link Libraries Accordingly
     let info = os_info::get();
     if info.os_type() == os_info::Type::Windows {
+        let url = format!("{}/libpjproject-x86_64-x64-vc14-Release.zip", base);
+        download_and_extract(&url);
         link_libs_windows();
     } else if (info.os_type() == os_info::Type::Linux) || (info.os_type() == os_info::Type::Ubuntu)
     {
-        if check_pj_built_status().is_none() {
-            compile_pj();
-        }
-        link_libs_unix();
+        let url = format!("{}/pjproject-x86_64-pc-linux-gnu.zip", base);
+        download_and_extract(&url);
+        link_libs_linux();
     }
 
     let ignored_macros = IgnoreMacros(
@@ -82,22 +70,41 @@ fn main() {
         .expect("Couldn't write bindings!");
 }
 
-fn create_config() {
-    let file = File::create("pjproject/pjlib/include/pj/config_site.h");
-    match file {
-        Ok(_x) => println!("config_site.h created"),
-        Err(_x) => {
-            println!("config_site.h not created, Error!");
-            panic!("config_site.h not created, Error!");
-        }
-    };
-}
+fn download_and_extract(url: &str) {
+    // download
+    let out_dir = Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap()).join("pjlibs");
+    fs::create_dir_all(&out_dir).unwrap();
+    let archive_path = out_dir.join("pre-compiled.zip");
 
-fn check_path(p: String) -> Option<()> {
-    if Path::new(&p).exists() {
-        Some(())
-    } else {
-        None
+    if !archive_path.exists() {    
+        let bytes = reqwest::blocking::get(url).unwrap().bytes().unwrap();
+        fs::write(&archive_path, &bytes).unwrap();
+    }
+
+    // extract ZIP file
+    let file = std::fs::File::open(&archive_path).unwrap();
+    let mut archive = ZipArchive::new(file).unwrap();
+    
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).unwrap();
+        let outpath = match file.enclosed_name() {
+            Some(path) => out_dir.join(path),
+            None => continue,
+        };
+
+        if (*file.name()).ends_with('/') {
+            // Directory
+            fs::create_dir_all(&outpath).unwrap();
+        } else {
+            // File
+            if let Some(p) = outpath.parent() {
+                if !p.exists() {
+                    fs::create_dir_all(p).unwrap();
+                }
+            }
+            let mut outfile = fs::File::create(&outpath).unwrap();
+            std::io::copy(&mut file, &mut outfile).unwrap();
+        }
     }
 }
 
@@ -116,87 +123,39 @@ fn link_triple() -> String {
     )
 }
 
-fn check_pj_built_status() -> Option<()> {
-    let lt = format!("{}.a", link_triple());
-
-    check_path(format!("pjproject/third_party/lib/libg7221codec{}", lt))?;
-    check_path(format!("pjproject/third_party/lib/libgsmcodec{}", lt))?;
-    check_path(format!("pjproject/third_party/lib/libilbccodec{}", lt))?;
-    check_path(format!("pjproject/third_party/lib/libresample{}", lt))?;
-    check_path(format!("pjproject/third_party/lib/libspeex{}", lt))?;
-    check_path(format!("pjproject/third_party/lib/libsrtp{}", lt))?;
-
-    check_path(format!("pjproject/pjlib/lib/libpj{}", lt))?;
-
-    check_path(format!("pjproject/pjlib-util/lib/libpjlib-util{}", lt))?;
-
-    check_path(format!("pjproject/pjnath/lib/libpjnath{}", lt))?;
-
-    check_path(format!("pjproject/pjmedia/lib/libpjmedia{}", lt))?;
-    check_path(format!("pjproject/pjmedia/lib/libpjmedia-codec{}", lt))?;
-
-    check_path(format!("pjproject/pjmedia/lib/libpjmedia-audiodev{}", lt))?;
-    check_path(format!("pjproject/pjmedia/lib/libpjsdp{}", lt))?;
-
-    check_path(format!("pjproject/pjsip/lib/libpjsip{}", lt))?;
-    check_path(format!("pjproject/pjsip/lib/libpjsip-simple{}", lt))?;
-    check_path(format!("pjproject/pjsip/lib/libpjsip-ua{}", lt))?;
-    check_path(format!("pjproject/pjsip/lib/libpjsua{}", lt))
-}
-
-fn compile_pj() {
-    let mut c = Command::new("sh");
-
-    c.current_dir("./pjproject/");
-    c.spawn().unwrap().wait().unwrap();
-
-    make_cmd::make()
-        .arg("dep")
-        .current_dir("./pjproject/")
-        .spawn().unwrap().wait().unwrap();
-
-    make_cmd::make()
-        .current_dir("./pjproject/")
-        .spawn().unwrap().wait().unwrap();
-}
-
-
 // WINDOWS
 fn link_libs_windows() {
     let project_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     // The compiled libraries have been copied out of PJPROJECT to pjproject-sys/pjlibs/
-    println!("cargo:rustc-link-search={}/pjlibs/windows", project_dir);
+    println!("cargo:rustc-link-search={}/pjlibs", project_dir);
     println!("cargo:rustc-link-lib=static=libpjproject-x86_64-x64-vc14-Release");
 }
 
-fn link_libs_unix() {
+// LINUX
+fn link_libs_linux() {
+    let project_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let s = link_triple();
     let t = "static=";
 
     //Libraries inside PJPROJECT
-    println!("cargo:rustc-link-search=pjproject/pjsip/lib/");
+    println!("cargo:rustc-link-search={}/pjlibs", project_dir);
     println!("cargo:rustc-link-lib={}pjsua{}", t, s);
     println!("cargo:rustc-link-lib={}pjsip{}", t, s);
     println!("cargo:rustc-link-lib={}pjsip-simple{}", t, s);
     println!("cargo:rustc-link-lib={}pjsua2{}", t, s);
     println!("cargo:rustc-link-lib={}pjsip-ua{}", t, s);
 
-    println!("cargo:rustc-link-search=pjproject/pjlib/lib/");
     println!("cargo:rustc-link-lib={}pj{}", t, s);
-    
-    println!("cargo:rustc-link-search=pjproject/pjmedia/lib/");
+
     println!("cargo:rustc-link-lib={}pjmedia{}", t, s);
     println!("cargo:rustc-link-lib={}pjmedia-codec{}", t, s);
     println!("cargo:rustc-link-lib={}pjmedia-videodev{}", t, s);
     println!("cargo:rustc-link-lib={}pjmedia-audiodev{}", t, s);
 
-    println!("cargo:rustc-link-search=pjproject/pjnath/lib/");
     println!("cargo:rustc-link-lib={}pjnath{}", t, s);
 
-    println!("cargo:rustc-link-search=pjproject/pjlib-util/lib/");
     println!("cargo:rustc-link-lib={}pjlib-util{}", t, s);
 
-    println!("cargo:rustc-link-search=pjproject/third_party/lib/");
     println!("cargo:rustc-link-lib={}gsmcodec{}", t, s);
     println!("cargo:rustc-link-lib={}resample{}", t, s);
     println!("cargo:rustc-link-lib={}srtp{}", t, s);
