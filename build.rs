@@ -23,6 +23,7 @@ impl bindgen::callbacks::ParseCallbacks for IgnoreMacros {
 }
 
 fn main() {
+    pkg_config::Config::new().probe("libpjproject").unwrap();
     println!("cargo:rerun-if-changed=wrapper.h");
 
     //1. Fetch pjproject
@@ -69,11 +70,8 @@ fn main() {
 
     //5. Produce bindings.rs file
     let bindings = bindgen::Builder::default()
-        .clang_arg("-I./pjproject/pjlib/include")
-        .clang_arg("-I./pjproject/pjsip/include")
-        .clang_arg("-I./pjproject/pjlib-util/include")
-        .clang_arg("-I./pjproject/pjmedia/include")
-        .clang_arg("-I./pjproject/pjnath/include")
+        .clang_arg("-L/usr/local/lib")
+        .clang_arg("-I/usr/local/include")
         .header("wrapper.h")
         .parse_callbacks(Box::new(ignored_macros))
         .generate()
