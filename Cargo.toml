@@ -10,7 +10,7 @@ path = "src/lib.rs"
 
 [build-dependencies]
 bindgen = "0.69"
-pkg-config = "0.3.16"
+cc = "1.2.40"
+make-cmd = "0.1.0"
+os_info = "3.12.0"
 
-
-[dependencies]
