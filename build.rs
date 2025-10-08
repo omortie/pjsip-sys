@@ -188,6 +188,8 @@ fn link_libs_linux() {
     println!("cargo:rustc-link-lib={}speex{}", t, s);
     println!("cargo:rustc-link-lib={}ilbccodec{}", t, s);
     println!("cargo:rustc-link-lib={}g7221codec{}", t, s);
+    println!("cargo:rustc-link-lib={}webrtc{}", t, s);
+    println!("cargo:rustc-link-lib={}yuv{}", t, s);
 
     // Dependencies
     println!("cargo:rustc-link-lib=ssl");
