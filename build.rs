@@ -3,6 +3,8 @@ extern crate bindgen;
 use os_info;
 
 use std::collections::HashSet;
+use std::fs::File;
+use std::process::Command;
 use std::{env, fs};
 use std::path::{Path, PathBuf};
 use zip::ZipArchive;
@@ -23,10 +25,23 @@ impl bindgen::callbacks::ParseCallbacks for IgnoreMacros {
 fn main() {
     println!("cargo:rerun-if-changed=wrapper.h");
 
-    //1. Get the pre-compiled PJPROJECT binaries from Github Releases
+    //1. Fetch pjproject
+    let curr_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    Command::new("git")
+        .arg("submodule")
+        .arg("update")
+        .arg("--init")
+        .current_dir(&curr_dir)
+        .status()
+        .unwrap();
+
+    //2. Create config_site.h
+    create_config();
+
+    //3. Get the pre-compiled PJPROJECT binaries from Github Releases
     let base = "https://github.com/omortie/pjsip-sys/releases/download/pre-compiled";
 
-    //3. Determine OS and Link Libraries Accordingly
+    //4. Determine OS and Link Libraries Accordingly
     let info = os_info::get();
     if info.os_type() == os_info::Type::Windows {
         let url = format!("{}/libpjproject-x86_64-x64-vc14-Release.zip", base);
@@ -52,7 +67,7 @@ fn main() {
         .collect(),
     );
 
-    //4. Produce bindings.rs file
+    //5. Produce bindings.rs file
     let bindings = bindgen::Builder::default()
         .clang_arg("-I./pjproject/pjlib/include")
         .clang_arg("-I./pjproject/pjsip/include")
@@ -121,6 +136,17 @@ fn link_triple() -> String {
             env::var("CARGO_CFG_TARGET_OS").unwrap(),
             real_env()
     )
+}
+
+fn create_config() {
+    let file = File::create("pjproject/pjlib/include/pj/config_site.h");
+    match file {
+        Ok(_x) => println!("config_site.h created"),
+        Err(_x) => {
+            println!("config_site.h not created, Error!");
+            panic!("config_site.h not created, Error!");
+        }
+    };
 }
 
 // WINDOWS
