@@ -35,7 +35,7 @@ fn main() {
         .status()
         .unwrap();
 
-    //2. Create config_site.h
+    //2. Create config_site.h necessary for pjproject linking
     create_config();
 
     //3. Get the pre-compiled PJPROJECT binaries from Github Releases
