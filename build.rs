@@ -4,9 +4,9 @@ use os_info;
 
 use std::collections::HashSet;
 use std::fs::File;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{env, fs};
-use std::path::{Path, PathBuf};
 use zip::ZipArchive;
 
 #[derive(Debug)]
@@ -47,7 +47,8 @@ fn main() {
         let url = format!("{}/libpjproject-x86_64-x64-vc14-Release.zip", base);
         download_and_extract(&url);
         link_libs_windows();
-    } else if (info.os_type() == os_info::Type::Linux) || (info.os_type() == os_info::Type::Ubuntu)
+    } 
+    #[cfg(target_os = "linux")]
     {
         let url = format!("{}/pjproject-x86_64-pc-linux-gnu.zip", base);
         download_and_extract(&url);
