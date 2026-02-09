@@ -320,10 +320,4 @@ fn link_libs_android() {
     println!("cargo:rustc-link-lib=static=g7221codec-{}", target_triple);
     println!("cargo:rustc-link-lib=static=webrtc-{}", target_triple);
     println!("cargo:rustc-link-lib=static=yuv-{}", target_triple);
-    
-    // Android system libraries
-    println!("cargo:rustc-link-lib=log");
-    println!("cargo:rustc-link-lib=OpenSLES");
-    println!("cargo:rustc-link-lib=m");
-    println!("cargo:rustc-link-lib=c");
 }
