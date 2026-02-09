@@ -53,14 +53,28 @@ fn main() {
         if target_os == "android" {
             let url = format!("{}/pjproject-aarch64-unknown-linux-android.zip", base);
             download_and_extract(&url);
-            link_libs_android();
+            configure_android();
         } else {
             let url = format!("{}/pjproject-x86_64-pc-linux-gnu.zip", base);
             download_and_extract(&url);
-            link_libs_linux();
+            configure_linux();
         }
     }
+}
 
+fn configure_android() {
+    link_libs_android();
+    generate_bindings_android();
+}
+
+fn configure_linux() {
+    link_libs_linux();
+    generate_bindings_default();
+}
+
+fn generate_bindings_android() {
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+    
     let ignored_macros = IgnoreMacros(
         vec![
             "FP_NORMAL".into(),
@@ -74,7 +88,70 @@ fn main() {
         .collect(),
     );
 
-    //5. Produce bindings.rs file
+    let mut builder = bindgen::Builder::default()
+        .clang_arg("-I./pjproject/pjlib/include")
+        .clang_arg("-I./pjproject/pjsip/include")
+        .clang_arg("-I./pjproject/pjlib-util/include")
+        .clang_arg("-I./pjproject/pjmedia/include")
+        .clang_arg("-I./pjproject/pjnath/include")
+        .header("wrapper.h")
+        .parse_callbacks(Box::new(ignored_macros));
+
+    // Define Android-specific macros
+    builder = builder
+        .clang_arg("-DPJ_ANDROID=1")
+        .clang_arg("-D__ANDROID__=1")
+        .clang_arg("-DANDROID=1")
+        .clang_arg("-DPJ_IS_LITTLE_ENDIAN=1")
+        .clang_arg("-DPJ_IS_BIG_ENDIAN=0");
+        
+    // Set target triple for clang
+    let target_triple = format!("{}-unknown-linux-android", target_arch);
+    builder = builder.clang_arg(format!("--target={}", target_triple));
+    
+    // Add Android NDK sysroot if available
+    if let Ok(ndk_home) = env::var("ANDROID_NDK_HOME") {
+        println!("NDK Home: {}", ndk_home);
+        
+        // Modern NDK uses unified headers in toolchains/llvm/prebuilt/{host}/sysroot
+        let host_os = if cfg!(target_os = "linux") {
+            "linux-x86_64"
+        } else if cfg!(target_os = "macos") {
+            "darwin-x86_64"
+        } else if cfg!(target_os = "windows") {
+            "windows-x86_64"
+        } else {
+            "linux-x86_64" // fallback
+        };
+        
+        let sysroot = format!("{}/toolchains/llvm/prebuilt/{}/sysroot", ndk_home, host_os);
+        builder = builder.clang_arg(format!("--sysroot={}", sysroot));
+    }
+
+    let bindings = builder
+        .generate()
+        .expect("Unable to generate bindings");
+
+    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    bindings
+        .write_to_file(out_path.join("bindings.rs"))
+        .expect("Couldn't write bindings!");
+}
+
+fn generate_bindings_default() {
+    let ignored_macros = IgnoreMacros(
+        vec![
+            "FP_NORMAL".into(),
+            "FP_SUBNORMAL".into(),
+            "FP_ZERO".into(),
+            "FP_INFINITE".into(),
+            "FP_NAN".into(),
+            "IPPORT_RESERVED".into(),
+        ]
+        .into_iter()
+        .collect(),
+    );
+
     let bindings = bindgen::Builder::default()
         .clang_arg("-I./pjproject/pjlib/include")
         .clang_arg("-I./pjproject/pjsip/include")
