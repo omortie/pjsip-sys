@@ -22,6 +22,14 @@ impl bindgen::callbacks::ParseCallbacks for IgnoreMacros {
     }
 }
 
+fn get_target_info() -> (String, String, String) {
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+    // let target_vendor = env::var("CARGO_CFG_TARGET_VENDOR").unwrap_or("unknown".to_string());
+    let vendor = if target_arch == "x86_64" { "pc".to_string() } else { "unknown".to_string() };
+    (target_os, vendor, target_arch)
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=wrapper.h");
 
@@ -43,24 +51,28 @@ fn main() {
 
     //4. Determine OS and Link Libraries Accordingly
     let info = os_info::get();
-    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let (target_os, vendor, target_arch) = get_target_info();
     
     if info.os_type() == os_info::Type::Windows {
-        let url = format!("{}/libpjproject-x86_64-x64-vc14-Release.zip", base);
+        let url = format!("{}/{}-x64-vc14-Release.zip", base, target_arch);
         download_and_extract(&url);
         link_libs_windows();
     } else if (info.os_type() == os_info::Type::Linux) || (info.os_type() == os_info::Type::Ubuntu) {
+        // if target arch is x86_64 use "pc" as vendor otherwise use "unknown"
+        
+
         if target_os == "android" {
-            let url = format!("{}/pjproject-aarch64-unknown-linux-android.zip", base);
-            download_and_extract(&url);
-            configure_android();
+        let url = format!("{}/{}-{}-linux-{}.zip", base, target_arch, vendor, target_os);
+        println!("Downloading from URL: {}", url);
+        download_and_extract(&url);
+        configure_android();
         } else {
-            let url = format!("{}/pjproject-x86_64-pc-linux-gnu.zip", base);
-            download_and_extract(&url);
-            configure_linux();
-        }
+        let url = format!("{}/{}-{}-linux-gnu.zip", base, target_arch, vendor);
+        download_and_extract(&url);
+        configure_linux();
     }
 }
+}   
 
 fn configure_android() {
     link_libs_android();
@@ -73,7 +85,7 @@ fn configure_linux() {
 }
 
 fn generate_bindings_android() {
-    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+    let target_arch = get_target_info().2;
     
     let ignored_macros = IgnoreMacros(
         vec![
@@ -214,10 +226,11 @@ fn real_env() -> String {
 }
 
 fn link_triple() -> String {
+    let info = get_target_info();
     format!("-{}-{}-{}-{}",
-            env::var("CARGO_CFG_TARGET_ARCH").unwrap(),
-            "pc",
-            env::var("CARGO_CFG_TARGET_OS").unwrap(),
+            info.2,
+            info.0,
+            info.1,
             real_env()
     )
 }
@@ -286,8 +299,8 @@ fn link_libs_linux() {
 // ANDROID
 fn link_libs_android() {
     let project_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
-    let target_triple = format!("{}-unknown-linux-android", target_arch);
+    let info = get_target_info();
+    let target_triple = format!("{}-{}-linux-android", info.2, info.1);
     
     println!("cargo:rustc-link-search={}/pjlibs", project_dir);
     
@@ -320,4 +333,21 @@ fn link_libs_android() {
     println!("cargo:rustc-link-lib=static=g7221codec-{}", target_triple);
     println!("cargo:rustc-link-lib=static=webrtc-{}", target_triple);
     println!("cargo:rustc-link-lib=static=yuv-{}", target_triple);
+
+    println!("cargo:rustc-link-lib=crypto");
+    println!("cargo:rustc-link-lib=ssl");
+    println!("cargo:rustc-link-lib=oboe");
+
+    // Android system libraries
+    println!("cargo:rustc-link-lib=c");
+    println!("cargo:rustc-link-lib=m");
+    println!("cargo:rustc-link-lib=log");
+    println!("cargo:rustc-link-lib=OpenSLES");
+    println!("cargo:rustc-link-lib=c++_shared");
+    println!("cargo:rustc-link-lib=dl");
+    println!("cargo:rustc-link-lib=mediandk");
+    println!("cargo:rustc-link-lib=GLESv2");
+    println!("cargo:rustc-link-lib=EGL");
+    println!("cargo:rustc-link-lib=android");
+
 }
