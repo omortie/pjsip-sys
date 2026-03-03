@@ -85,7 +85,7 @@ fn configure_linux() {
 }
 
 fn generate_bindings_android() {
-    let target_arch = get_target_info().2;
+    let (target_os, target_vendor, target_arch) = get_target_info();
     
     let ignored_macros = IgnoreMacros(
         vec![
@@ -113,12 +113,10 @@ fn generate_bindings_android() {
     builder = builder
         .clang_arg("-DPJ_ANDROID=1")
         .clang_arg("-D__ANDROID__=1")
-        .clang_arg("-DANDROID=1")
-        .clang_arg("-DPJ_IS_LITTLE_ENDIAN=1")
-        .clang_arg("-DPJ_IS_BIG_ENDIAN=0");
+        .clang_arg("-DANDROID=1");
         
     // Set target triple for clang
-    let target_triple = format!("{}-unknown-linux-android", target_arch);
+    let target_triple = format!("{}-{}-linux-{}", target_arch, target_vendor, target_os);
     builder = builder.clang_arg(format!("--target={}", target_triple));
     
     // Add Android NDK sysroot if available
@@ -232,8 +230,8 @@ fn link_triple() -> String {
     let info = get_target_info();
     format!("-{}-{}-{}-{}",
             info.2,
-            info.0,
             info.1,
+            info.0,
             real_env()
     )
 }
