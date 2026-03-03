@@ -182,10 +182,13 @@ fn generate_bindings_default() {
 }
 
 fn download_and_extract(url: &str) {
+    // extract file name from end of url
+    let file_name = url.split('/').last().unwrap_or("pre-compiled.zip");
+
     // download
     let out_dir = Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap()).join("pjlibs");
     fs::create_dir_all(&out_dir).unwrap();
-    let archive_path = out_dir.join("pre-compiled.zip");
+    let archive_path = out_dir.join(file_name);
 
     if !archive_path.exists() {    
         let bytes = reqwest::blocking::get(url).unwrap().bytes().unwrap();
