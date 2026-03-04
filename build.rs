@@ -55,7 +55,7 @@ fn main() {
     
     if info.os_type() == os_info::Type::Windows {
         let url = format!("{}/{}-x64-vc14-Release.zip", base, target_arch);
-        download_and_extract(&url);
+        // download_and_extract(&url);
         link_libs_windows();
     } else if (info.os_type() == os_info::Type::Linux) || (info.os_type() == os_info::Type::Ubuntu) {
         // if target arch is x86_64 use "pc" as vendor otherwise use "unknown"
@@ -64,11 +64,11 @@ fn main() {
         if target_os == "android" {
         let url = format!("{}/{}-{}-linux-{}.zip", base, target_arch, vendor, target_os);
         println!("Downloading from URL: {}", url);
-        download_and_extract(&url);
+        // download_and_extract(&url);
         configure_android();
         } else {
         let url = format!("{}/{}-{}-linux-gnu.zip", base, target_arch, vendor);
-        download_and_extract(&url);
+        // download_and_extract(&url);
         configure_linux();
     }
 }
@@ -113,7 +113,9 @@ fn generate_bindings_android() {
     builder = builder
         .clang_arg("-DPJ_ANDROID=1")
         .clang_arg("-D__ANDROID__=1")
-        .clang_arg("-DANDROID=1");
+        .clang_arg("-DANDROID=1")
+        .clang_arg("-DPJ_IS_LITTLE_ENDIAN=1")
+        .clang_arg("-DPJ_IS_BIG_ENDIAN=0");
         
     // Set target triple for clang
     let target_triple = format!("{}-{}-linux-{}", target_arch, target_vendor, target_os);
@@ -335,9 +337,6 @@ fn link_libs_android() {
     println!("cargo:rustc-link-lib=static=webrtc-{}", target_triple);
     println!("cargo:rustc-link-lib=static=yuv-{}", target_triple);
 
-    println!("cargo:rustc-link-lib=crypto");
-    println!("cargo:rustc-link-lib=ssl");
-    println!("cargo:rustc-link-lib=oboe");
 
     // Android system libraries
     println!("cargo:rustc-link-lib=c");
