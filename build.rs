@@ -55,7 +55,7 @@ fn main() {
     
     if info.os_type() == os_info::Type::Windows {
         let url = format!("{}/{}-x64-vc14-Release.zip", base, target_arch);
-        // download_and_extract(&url);
+        download_and_extract(&url);
         link_libs_windows();
     } else if (info.os_type() == os_info::Type::Linux) || (info.os_type() == os_info::Type::Ubuntu) {
         // if target arch is x86_64 use "pc" as vendor otherwise use "unknown"
@@ -64,11 +64,11 @@ fn main() {
         if target_os == "android" {
         let url = format!("{}/{}-{}-linux-{}.zip", base, target_arch, vendor, target_os);
         println!("Downloading from URL: {}", url);
-        // download_and_extract(&url);
+        download_and_extract(&url);
         configure_android();
         } else {
         let url = format!("{}/{}-{}-linux-gnu.zip", base, target_arch, vendor);
-        // download_and_extract(&url);
+        download_and_extract(&url);
         configure_linux();
     }
 }
