@@ -58,9 +58,6 @@ fn main() {
         download_and_extract(&url);
         link_libs_windows();
     } else if (info.os_type() == os_info::Type::Linux) || (info.os_type() == os_info::Type::Ubuntu) {
-        // if target arch is x86_64 use "pc" as vendor otherwise use "unknown"
-        
-
         if target_os == "android" {
         let url = format!("{}/{}-{}-linux-{}.zip", base, target_arch, vendor, target_os);
         println!("Downloading from URL: {}", url);
@@ -85,7 +82,7 @@ fn configure_linux() {
 }
 
 fn generate_bindings_android() {
-    let (target_os, target_vendor, target_arch) = get_target_info();
+    let (_, __, target_arch) = get_target_info();
     
     let ignored_macros = IgnoreMacros(
         vec![
@@ -111,14 +108,17 @@ fn generate_bindings_android() {
 
     // Define Android-specific macros
     builder = builder
-        .clang_arg("-DPJ_ANDROID=1")
-        .clang_arg("-D__ANDROID__=1")
         .clang_arg("-DANDROID=1")
+        .clang_arg("-D_FORTIFY_SOURCE=2")
+        .clang_arg("-D__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__")
         .clang_arg("-DPJ_IS_LITTLE_ENDIAN=1")
         .clang_arg("-DPJ_IS_BIG_ENDIAN=0");
         
-    // Set target triple for clang
-    let target_triple = format!("{}-{}-linux-{}", target_arch, target_vendor, target_os);
+    // Set target triple for clang — must exactly match what was used to compile the .a libraries.
+    // Vendor is "none" (NDK convention) and the API level suffix controls __ANDROID_API__ guards
+    // in NDK headers. Read from ANDROID_API_LEVEL env var, defaulting to 35.
+    let api_level = env::var("ANDROID_API_LEVEL").unwrap_or_else(|_| "35".to_string());
+    let target_triple = format!("{}-none-linux-android{}", target_arch, api_level);
     builder = builder.clang_arg(format!("--target={}", target_triple));
     
     // Add Android NDK sysroot if available
@@ -126,7 +126,7 @@ fn generate_bindings_android() {
         println!("NDK Home: {}", ndk_home);
         
         // Modern NDK uses unified headers in toolchains/llvm/prebuilt/{host}/sysroot
-        let host_os = if cfg!(target_os = "linux") {
+        let target_sysroot_dir = if cfg!(target_os = "linux") {
             "linux-x86_64"
         } else if cfg!(target_os = "macos") {
             "darwin-x86_64"
@@ -136,7 +136,7 @@ fn generate_bindings_android() {
             "linux-x86_64" // fallback
         };
         
-        let sysroot = format!("{}/toolchains/llvm/prebuilt/{}/sysroot", ndk_home, host_os);
+        let sysroot = format!("{}/toolchains/llvm/prebuilt/{}/sysroot", ndk_home, target_sysroot_dir);
         builder = builder.clang_arg(format!("--sysroot={}", sysroot));
     }
 
@@ -239,14 +239,16 @@ fn link_triple() -> String {
 }
 
 fn create_config() {
-    let file = File::create("pjproject/pjlib/include/pj/config_site.h");
-    match file {
-        Ok(_x) => println!("config_site.h created"),
-        Err(_x) => {
-            println!("config_site.h not created, Error!");
-            panic!("config_site.h not created, Error!");
-        }
-    };
+    let config_path = Path::new("pjproject/pjlib/include/pj/config_site.h");
+    if !config_path.exists() {
+        let mut file = File::create(config_path).expect("config_site.h not created, Error!");
+        use std::io::Write;
+        file.write_all(b"/* Activate Android specific settings in the 'config_site_sample.h' */\n#define PJ_CONFIG_ANDROID 1\n#include <pj/config_site_sample.h>\n\n#define PJMEDIA_HAS_VIDEO 0\n")
+            .expect("Failed to write config_site.h");
+        println!("config_site.h created");
+    } else {
+        println!("config_site.h already exists, leaving unchanged");
+    }
 }
 
 // WINDOWS
