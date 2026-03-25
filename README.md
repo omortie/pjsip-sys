@@ -5,6 +5,7 @@ FFI bindings for the [PJSIP](https://pjsip.org/) generated with [Rust Bindgen](h
 #### Supported OS
 
 - Linux
+- Android
 - Windows
 
 ### Note
