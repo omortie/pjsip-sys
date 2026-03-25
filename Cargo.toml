@@ -1,5 +1,5 @@
 [package]
-version = "0.0.2"
+version = "0.0.3"
 name = "pjsip-sys"
 description = "Rust binding to PJSIP"
 edition = "2018"
