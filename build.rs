@@ -26,7 +26,11 @@ fn get_target_info() -> (String, String, String) {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
     // let target_vendor = env::var("CARGO_CFG_TARGET_VENDOR").unwrap_or("unknown".to_string());
-    let vendor = if target_arch == "x86_64" { "pc".to_string() } else { "unknown".to_string() };
+    let vendor = if target_arch == "x86_64" {
+        "pc".to_string()
+    } else {
+        "unknown".to_string()
+    };
     (target_os, vendor, target_arch)
 }
 
@@ -52,24 +56,28 @@ fn main() {
     //4. Determine OS and Link Libraries Accordingly
     let info = os_info::get();
     let (target_os, vendor, target_arch) = get_target_info();
-    
+
     if info.os_type() == os_info::Type::Windows {
         let url = format!("{}/{}-x64-vc14-Release.zip", base, target_arch);
         download_and_extract(&url);
-        link_libs_windows();
-    } else if (info.os_type() == os_info::Type::Linux) || (info.os_type() == os_info::Type::Ubuntu) {
+        configure_windows();
+    } else if (info.os_type() == os_info::Type::Linux) || (info.os_type() == os_info::Type::Ubuntu)
+    {
         if target_os == "android" {
-        let url = format!("{}/{}-{}-linux-{}.zip", base, target_arch, vendor, target_os);
-        println!("Downloading from URL: {}", url);
-        download_and_extract(&url);
-        configure_android();
+            let url = format!(
+                "{}/{}-{}-linux-{}.zip",
+                base, target_arch, vendor, target_os
+            );
+            println!("Downloading from URL: {}", url);
+            download_and_extract(&url);
+            configure_android();
         } else {
-        let url = format!("{}/{}-{}-linux-gnu.zip", base, target_arch, vendor);
-        download_and_extract(&url);
-        configure_linux();
+            let url = format!("{}/{}-{}-linux-gnu.zip", base, target_arch, vendor);
+            download_and_extract(&url);
+            configure_linux();
+        }
     }
 }
-}   
 
 fn configure_android() {
     link_libs_android();
@@ -81,9 +89,14 @@ fn configure_linux() {
     generate_bindings_default();
 }
 
+fn configure_windows() {
+    link_libs_windows();
+    generate_bindings_default();
+}
+
 fn generate_bindings_android() {
     let (_, __, target_arch) = get_target_info();
-    
+
     let ignored_macros = IgnoreMacros(
         vec![
             "FP_NORMAL".into(),
@@ -113,18 +126,18 @@ fn generate_bindings_android() {
         .clang_arg("-D__ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__")
         .clang_arg("-DPJ_IS_LITTLE_ENDIAN=1")
         .clang_arg("-DPJ_IS_BIG_ENDIAN=0");
-        
+
     // Set target triple for clang — must exactly match what was used to compile the .a libraries.
     // Vendor is "none" (NDK convention) and the API level suffix controls __ANDROID_API__ guards
     // in NDK headers. Read from ANDROID_API_LEVEL env var, defaulting to 35.
     let api_level = env::var("ANDROID_API_LEVEL").unwrap_or_else(|_| "35".to_string());
     let target_triple = format!("{}-none-linux-android{}", target_arch, api_level);
     builder = builder.clang_arg(format!("--target={}", target_triple));
-    
+
     // Add Android NDK sysroot if available
     if let Ok(ndk_home) = env::var("ANDROID_NDK_HOME") {
         println!("NDK Home: {}", ndk_home);
-        
+
         // Modern NDK uses unified headers in toolchains/llvm/prebuilt/{host}/sysroot
         let target_sysroot_dir = if cfg!(target_os = "linux") {
             "linux-x86_64"
@@ -135,14 +148,15 @@ fn generate_bindings_android() {
         } else {
             "linux-x86_64" // fallback
         };
-        
-        let sysroot = format!("{}/toolchains/llvm/prebuilt/{}/sysroot", ndk_home, target_sysroot_dir);
+
+        let sysroot = format!(
+            "{}/toolchains/llvm/prebuilt/{}/sysroot",
+            ndk_home, target_sysroot_dir
+        );
         builder = builder.clang_arg(format!("--sysroot={}", sysroot));
     }
 
-    let bindings = builder
-        .generate()
-        .expect("Unable to generate bindings");
+    let bindings = builder.generate().expect("Unable to generate bindings");
 
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     bindings
@@ -190,7 +204,7 @@ fn download_and_extract(url: &str) {
     fs::create_dir_all(&out_dir).unwrap();
     let archive_path = out_dir.join(file_name);
 
-    if !archive_path.exists() {    
+    if !archive_path.exists() {
         let bytes = reqwest::blocking::get(url).unwrap().bytes().unwrap();
         fs::write(&archive_path, &bytes).unwrap();
     }
@@ -198,7 +212,7 @@ fn download_and_extract(url: &str) {
     // extract ZIP file
     let file = std::fs::File::open(&archive_path).unwrap();
     let mut archive = ZipArchive::new(file).unwrap();
-    
+
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).unwrap();
         let outpath = match file.enclosed_name() {
@@ -230,12 +244,7 @@ fn real_env() -> String {
 
 fn link_triple() -> String {
     let info = get_target_info();
-    format!("-{}-{}-{}-{}",
-            info.2,
-            info.1,
-            info.0,
-            real_env()
-    )
+    format!("-{}-{}-{}-{}", info.2, info.1, info.0, real_env())
 }
 
 fn create_config() {
@@ -306,29 +315,38 @@ fn link_libs_android() {
     let project_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let info = get_target_info();
     let target_triple = format!("{}-{}-linux-android", info.2, info.1);
-    
+
     println!("cargo:rustc-link-search={}/pjlibs", project_dir);
-    
+
     // Core PJSIP libraries
     println!("cargo:rustc-link-lib=static=pjsua-{}", target_triple);
     println!("cargo:rustc-link-lib=static=pjsip-{}", target_triple);
     println!("cargo:rustc-link-lib=static=pjsip-simple-{}", target_triple);
     println!("cargo:rustc-link-lib=static=pjsip-ua-{}", target_triple);
-    
+
     // Base library
     println!("cargo:rustc-link-lib=static=pj-{}", target_triple);
-    
+
     // Media libraries
     println!("cargo:rustc-link-lib=static=pjmedia-{}", target_triple);
-    println!("cargo:rustc-link-lib=static=pjmedia-codec-{}", target_triple);
-    println!("cargo:rustc-link-lib=static=pjmedia-videodev-{}", target_triple);
-    println!("cargo:rustc-link-lib=static=pjmedia-audiodev-{}", target_triple);
+    println!(
+        "cargo:rustc-link-lib=static=pjmedia-codec-{}",
+        target_triple
+    );
+    println!(
+        "cargo:rustc-link-lib=static=pjmedia-videodev-{}",
+        target_triple
+    );
+    println!(
+        "cargo:rustc-link-lib=static=pjmedia-audiodev-{}",
+        target_triple
+    );
     println!("cargo:rustc-link-lib=static=pjsdp-{}", target_triple);
-    
+
     // NAT and utilities
     println!("cargo:rustc-link-lib=static=pjnath-{}", target_triple);
     println!("cargo:rustc-link-lib=static=pjlib-util-{}", target_triple);
-    
+
     // Codec libraries
     println!("cargo:rustc-link-lib=static=gsmcodec-{}", target_triple);
     println!("cargo:rustc-link-lib=static=resample-{}", target_triple);
@@ -338,7 +356,6 @@ fn link_libs_android() {
     println!("cargo:rustc-link-lib=static=g7221codec-{}", target_triple);
     println!("cargo:rustc-link-lib=static=webrtc-{}", target_triple);
     println!("cargo:rustc-link-lib=static=yuv-{}", target_triple);
-
 
     // Android system libraries
     println!("cargo:rustc-link-lib=c");
@@ -351,5 +368,4 @@ fn link_libs_android() {
     println!("cargo:rustc-link-lib=GLESv2");
     println!("cargo:rustc-link-lib=EGL");
     println!("cargo:rustc-link-lib=android");
-
 }
