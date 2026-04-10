@@ -62,10 +62,8 @@ fn main() {
         download_and_extract(&url);
         configure_windows();
     }
-
     #[cfg(target_os = "android")]
     {
-        let (target_os, vendor, target_arch) = get_target_info(); // Get target_os specifically for Android
         let url = format!(
             "{}/{}-{}-linux-{}.zip",
             base, target_arch, vendor, target_os
@@ -74,8 +72,7 @@ fn main() {
         download_and_extract(&url);
         configure_android();
     }
-
-    #[cfg(all(unix, not(target_os = "android"), not(target_os = "windows")))]
+    #[cfg(target_os = "linux")]
     {
         let url = format!("{}/{}-{}-linux-gnu.zip", base, target_arch, vendor);
         download_and_extract(&url);
