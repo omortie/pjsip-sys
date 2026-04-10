@@ -54,28 +54,32 @@ fn main() {
     let base = "https://github.com/omortie/pjsip-sys/releases/download/pre-compiled";
 
     //4. Determine OS and Link Libraries Accordingly
-    let info = os_info::get();
-    let (target_os, vendor, target_arch) = get_target_info();
+    let (_, vendor, target_arch) = get_target_info();
 
-    if info.os_type() == os_info::Type::Windows {
+    #[cfg(target_os = "windows")]
+    {
         let url = format!("{}/{}-x64-vc14-Release.zip", base, target_arch);
         download_and_extract(&url);
         configure_windows();
-    } else if (info.os_type() == os_info::Type::Linux) || (info.os_type() == os_info::Type::Ubuntu)
+    }
+
+    #[cfg(target_os = "android")]
     {
-        if target_os == "android" {
-            let url = format!(
-                "{}/{}-{}-linux-{}.zip",
-                base, target_arch, vendor, target_os
-            );
-            println!("Downloading from URL: {}", url);
-            download_and_extract(&url);
-            configure_android();
-        } else {
-            let url = format!("{}/{}-{}-linux-gnu.zip", base, target_arch, vendor);
-            download_and_extract(&url);
-            configure_linux();
-        }
+        let (target_os, vendor, target_arch) = get_target_info(); // Get target_os specifically for Android
+        let url = format!(
+            "{}/{}-{}-linux-{}.zip",
+            base, target_arch, vendor, target_os
+        );
+        println!("Downloading from URL: {}", url);
+        download_and_extract(&url);
+        configure_android();
+    }
+
+    #[cfg(all(unix, not(target_os = "android"), not(target_os = "windows")))]
+    {
+        let url = format!("{}/{}-{}-linux-gnu.zip", base, target_arch, vendor);
+        download_and_extract(&url);
+        configure_linux();
     }
 }
 
