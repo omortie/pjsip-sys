@@ -65,7 +65,6 @@ fn get_target_info() -> (String, String, String) {
     (target_os, vendor, target_arch)
 }
 
-
 fn main() {
     println!("cargo:rerun-if-changed=wrapper.h");
 
@@ -230,9 +229,11 @@ fn download_and_extract(url: &str) {
     // extract file name from end of url
     let file_name = url.split('/').last().unwrap_or("pre-compiled.zip");
 
-    // download
-    let out_dir = Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap()).join("pjlibs");
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let out_dir = PathBuf::from(manifest_dir).join("pjlibs");
+    // Create the directory if it doesn't exist
     fs::create_dir_all(&out_dir).unwrap();
+    
     let archive_path = out_dir.join(file_name);
 
     if !archive_path.exists() {
@@ -293,9 +294,13 @@ fn create_config() {
 
 // WINDOWS
 fn link_libs_windows() {
-    let project_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    // The compiled libraries have been copied out of PJPROJECT to pjproject-sys/pjlibs/
-    println!("cargo:rustc-link-search={}/pjlibs", project_dir);
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("Failed to get manifest dir");
+    let lib_path = PathBuf::from(manifest_dir).join("pjlibs");
+
+    // Convert to string and ensure we handle Windows UNC paths if necessary
+    let lib_path_str = lib_path.to_str().expect("Path is not valid UTF-8");
+
+    println!("cargo:rustc-link-search=native={}", lib_path_str);
     println!("cargo:rustc-link-lib=static=libpjproject-x86_64-x64-vc14-Release");
 }
 
