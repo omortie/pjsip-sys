@@ -22,6 +22,37 @@ impl bindgen::callbacks::ParseCallbacks for IgnoreMacros {
     }
 }
 
+fn is_linux_distro(os_type: os_info::Type) -> bool {
+    matches!(
+        os_type,
+        os_info::Type::Linux
+            | os_info::Type::Ubuntu
+            | os_info::Type::Debian
+            | os_info::Type::Fedora
+            | os_info::Type::CentOS
+            | os_info::Type::Arch
+            | os_info::Type::Alpine
+            | os_info::Type::Amazon
+            | os_info::Type::Android
+            | os_info::Type::EndeavourOS
+            | os_info::Type::Garuda
+            | os_info::Type::Gentoo
+            | os_info::Type::HardenedBSD
+            | os_info::Type::Kali
+            | os_info::Type::Manjaro
+            | os_info::Type::Mint
+            | os_info::Type::NixOS
+            | os_info::Type::openSUSE
+            | os_info::Type::OracleLinux
+            | os_info::Type::Pop
+            | os_info::Type::Raspbian
+            | os_info::Type::Redhat
+            | os_info::Type::RedHatEnterprise
+            | os_info::Type::Solus
+            | os_info::Type::SUSE
+    )
+}
+
 fn get_target_info() -> (String, String, String) {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
@@ -33,6 +64,7 @@ fn get_target_info() -> (String, String, String) {
     };
     (target_os, vendor, target_arch)
 }
+
 
 fn main() {
     println!("cargo:rerun-if-changed=wrapper.h");
@@ -61,8 +93,7 @@ fn main() {
         let url = format!("{}/{}-x64-vc14-Release.zip", base, target_arch);
         download_and_extract(&url);
         configure_windows();
-    } else if (info.os_type() == os_info::Type::Linux) || (info.os_type() == os_info::Type::Ubuntu)
-    {
+    } else if is_linux_distro(info.os_type()) {
         if target_os == "android" {
             let url = format!(
                 "{}/{}-{}-linux-{}.zip",
