@@ -22,6 +22,37 @@ impl bindgen::callbacks::ParseCallbacks for IgnoreMacros {
     }
 }
 
+fn is_linux_distro(os_type: os_info::Type) -> bool {
+    matches!(
+        os_type,
+        os_info::Type::Linux
+            | os_info::Type::Ubuntu
+            | os_info::Type::Debian
+            | os_info::Type::Fedora
+            | os_info::Type::CentOS
+            | os_info::Type::Arch
+            | os_info::Type::Alpine
+            | os_info::Type::Amazon
+            | os_info::Type::Android
+            | os_info::Type::EndeavourOS
+            | os_info::Type::Garuda
+            | os_info::Type::Gentoo
+            | os_info::Type::HardenedBSD
+            | os_info::Type::Kali
+            | os_info::Type::Manjaro
+            | os_info::Type::Mint
+            | os_info::Type::NixOS
+            | os_info::Type::openSUSE
+            | os_info::Type::OracleLinux
+            | os_info::Type::Pop
+            | os_info::Type::Raspbian
+            | os_info::Type::Redhat
+            | os_info::Type::RedHatEnterprise
+            | os_info::Type::Solus
+            | os_info::Type::SUSE
+    )
+}
+
 fn get_target_info() -> (String, String, String) {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
@@ -61,8 +92,7 @@ fn main() {
         let url = format!("{}/{}-x64-vc14-Release.zip", base, target_arch);
         download_and_extract(&url);
         configure_windows();
-    } else if (info.os_type() == os_info::Type::Linux) || (info.os_type() == os_info::Type::Ubuntu)
-    {
+    } else if is_linux_distro(info.os_type()) {
         if target_os == "android" {
             let url = format!(
                 "{}/{}-{}-linux-{}.zip",
@@ -199,9 +229,11 @@ fn download_and_extract(url: &str) {
     // extract file name from end of url
     let file_name = url.split('/').last().unwrap_or("pre-compiled.zip");
 
-    // download
-    let out_dir = Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap()).join("pjlibs");
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let out_dir = PathBuf::from(manifest_dir).join("pjlibs");
+    // Create the directory if it doesn't exist
     fs::create_dir_all(&out_dir).unwrap();
+    
     let archive_path = out_dir.join(file_name);
 
     if !archive_path.exists() {
@@ -262,10 +294,21 @@ fn create_config() {
 
 // WINDOWS
 fn link_libs_windows() {
-    let project_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    // The compiled libraries have been copied out of PJPROJECT to pjproject-sys/pjlibs/
-    println!("cargo:rustc-link-search={}/pjlibs", project_dir);
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("Failed to get manifest dir");
+    let lib_path = PathBuf::from(manifest_dir).join("pjlibs");
+
+    // Convert to string and ensure we handle Windows UNC paths if necessary
+    let lib_path_str = lib_path.to_str().expect("Path is not valid UTF-8");
+
+    println!("cargo:rustc-link-search=native={}", lib_path_str);
     println!("cargo:rustc-link-lib=static=libpjproject-x86_64-x64-vc14-Release");
+    
+    // Windows system libraries required for PJSIP
+    println!("cargo:rustc-link-lib=ole32");
+    println!("cargo:rustc-link-lib=oleaut32");
+    println!("cargo:rustc-link-lib=winmm");
+    println!("cargo:rustc-link-lib=ws2_32");
+    println!("cargo:rustc-link-lib=iphlpapi");
 }
 
 // LINUX
