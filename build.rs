@@ -302,6 +302,13 @@ fn link_libs_windows() {
 
     println!("cargo:rustc-link-search=native={}", lib_path_str);
     println!("cargo:rustc-link-lib=static=libpjproject-x86_64-x64-vc14-Release");
+    
+    // Windows system libraries required for PJSIP
+    println!("cargo:rustc-link-lib=ole32");
+    println!("cargo:rustc-link-lib=oleaut32");
+    println!("cargo:rustc-link-lib=winmm");
+    println!("cargo:rustc-link-lib=ws2_32");
+    println!("cargo:rustc-link-lib=iphlpapi");
 }
 
 // LINUX
