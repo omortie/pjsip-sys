@@ -3,8 +3,7 @@ extern crate bindgen;
 use os_info;
 
 use std::collections::HashSet;
-use std::fs::File;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 use std::{env, fs};
 use zip::ZipArchive;
@@ -67,6 +66,7 @@ fn get_target_info() -> (String, String, String) {
 
 fn main() {
     println!("cargo:rerun-if-changed=wrapper.h");
+    println!("cargo:rerun-if-changed=config_site.h");
 
     //1. Fetch pjproject
     let curr_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -98,7 +98,6 @@ fn main() {
                 "{}/{}-{}-linux-{}.zip",
                 base, target_arch, vendor, target_os
             );
-            println!("Downloading from URL: {}", url);
             download_and_extract(&url);
             configure_android();
         } else {
@@ -233,7 +232,7 @@ fn download_and_extract(url: &str) {
     let out_dir = PathBuf::from(manifest_dir).join("pjlibs");
     // Create the directory if it doesn't exist
     fs::create_dir_all(&out_dir).unwrap();
-    
+
     let archive_path = out_dir.join(file_name);
 
     if !archive_path.exists() {
@@ -247,24 +246,21 @@ fn download_and_extract(url: &str) {
 
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).unwrap();
-        let outpath = match file.enclosed_name() {
-            Some(path) => out_dir.join(path),
+        let name = match file.enclosed_name() {
+            Some(path) => match path.file_name() {
+                Some(fname) => fname.to_owned(),
+                None => continue,
+            },
             None => continue,
         };
 
         if (*file.name()).ends_with('/') {
-            // Directory
-            fs::create_dir_all(&outpath).unwrap();
-        } else {
-            // File
-            if let Some(p) = outpath.parent() {
-                if !p.exists() {
-                    fs::create_dir_all(p).unwrap();
-                }
-            }
-            let mut outfile = fs::File::create(&outpath).unwrap();
-            std::io::copy(&mut file, &mut outfile).unwrap();
+            continue;
         }
+
+        let outpath = out_dir.join(name);
+        let mut outfile = fs::File::create(&outpath).unwrap();
+        std::io::copy(&mut file, &mut outfile).unwrap();
     }
 }
 
@@ -280,16 +276,8 @@ fn link_triple() -> String {
 }
 
 fn create_config() {
-    let config_path = Path::new("pjproject/pjlib/include/pj/config_site.h");
-    if !config_path.exists() {
-        let mut file = File::create(config_path).expect("config_site.h not created, Error!");
-        use std::io::Write;
-        file.write_all(b"/* Activate Android specific settings in the 'config_site_sample.h' */\n#define PJ_CONFIG_ANDROID 1\n#include <pj/config_site_sample.h>\n\n#define PJMEDIA_HAS_VIDEO 0\n")
-            .expect("Failed to write config_site.h");
-        println!("config_site.h created");
-    } else {
-        println!("config_site.h already exists, leaving unchanged");
-    }
+    fs::copy("config_site.h", "pjproject/pjlib/include/pj/config_site.h")
+        .expect("Failed to copy config_site.h into pjproject");
 }
 
 // WINDOWS
@@ -302,7 +290,7 @@ fn link_libs_windows() {
 
     println!("cargo:rustc-link-search=native={}", lib_path_str);
     println!("cargo:rustc-link-lib=static=libpjproject-x86_64-x64-vc14-Release");
-    
+
     // Windows system libraries required for PJSIP
     println!("cargo:rustc-link-lib=ole32");
     println!("cargo:rustc-link-lib=oleaut32");
